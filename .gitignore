@@ -1,0 +1,7 @@
+node_modules
+dist
+.DS_Store
+
+# Reference images and videos stay local
+car-reference/
+scene-ref.png
