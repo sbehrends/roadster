@@ -98,9 +98,23 @@ view.addEventListener('pointerdown', (event) => {
 const endDrag = (event) => {
   pointers.delete(event.pointerId);
   dragging = false;
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinch = Math.hypot(a.x - b.x, a.y - b.y);
+  }
 };
 view.addEventListener('pointerup', endDrag);
 view.addEventListener('pointercancel', endDrag);
+view.addEventListener('lostpointercapture', endDrag);
+// Like the touch overlay: an app switch may never send pointerup, so forget every finger.
+const forgetPointers = () => {
+  pointers.clear();
+  dragging = false;
+};
+window.addEventListener('blur', forgetPointers);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) forgetPointers();
+});
 view.addEventListener('pointermove', (event) => {
   if (pointers.has(event.pointerId)) pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   if (pointers.size === 2) {
