@@ -192,7 +192,8 @@ function frameCamera(dt) {
   camera.position.copy(camPos);
   camera.up.set(0, 1, 0).lerp(bodyUp, ride).normalize();
   camera.lookAt(look);
-  const fov = fitFov(rigged.fov + Math.min(speed, 70) * 0.13, camera.aspect, MIN_HORIZONTAL_FOV);
+  // Fit the camera's base lens to the screen, then add the speed kick so it survives in portrait.
+  const fov = fitFov(rigged.fov, camera.aspect, MIN_HORIZONTAL_FOV) + Math.min(speed, 70) * 0.13;
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov += (fov - camera.fov) * Math.min(1, dt * 3);
     camera.updateProjectionMatrix();

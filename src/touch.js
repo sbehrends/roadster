@@ -135,5 +135,19 @@ export function createTouchControls({ onCamera } = {}) {
     button.addEventListener('contextmenu', (event) => event.preventDefault());
   }
 
+  // Leaving the app mid-press (home gesture, call, notification shade) may never
+  // send pointerup or pointercancel, so let go of everything, like the keyboard does.
+  const releaseAll = () => {
+    releaseStick();
+    for (const button of root.querySelectorAll('[data-act]')) {
+      button.classList.remove('down');
+      press[button.dataset.act](false);
+    }
+  };
+  window.addEventListener('blur', releaseAll);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAll();
+  });
+
   return { state, root };
 }

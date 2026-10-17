@@ -19,6 +19,22 @@ test('joystick: a small wobble near the centre does nothing', () => {
   assert.deepEqual(stickToAxes(4, -5, 60), { forward: 0, steer: 0 });
 });
 
+test('joystick: a slightly off-axis push leaves the other axis at exactly zero', () => {
+  const up = stickToAxes(10, -60, 60);
+  assert.equal(up.steer, 0);
+  assert.ok(up.forward > 0.9);
+  const side = stickToAxes(-60, 9, 60);
+  assert.equal(side.forward, 0);
+  assert.ok(side.steer > 0.9);
+});
+
+test('joystick: each axis ramps up smoothly from its deadzone', () => {
+  const a = stickToAxes(-16, -60, 60).steer;
+  const b = stickToAxes(-22, -60, 60).steer;
+  assert.ok(a >= 0 && a < 0.1, `just past the deadzone: ${a}`);
+  assert.ok(b > a, `${a} → ${b}`);
+});
+
 test('joystick: pushing past the rim stays at full deflection', () => {
   const a = stickToAxes(0, -400, 60);
   assert.equal(a.forward, 1);
