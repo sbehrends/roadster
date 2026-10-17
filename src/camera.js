@@ -73,3 +73,12 @@ export function rigOffset(rig, speed) {
   const elevation = clamp(Math.atan2(height, dist) + rig.tilt, ELEVATION_MIN, ELEVATION_MAX);
   return { back: Math.cos(elevation) * r, up: Math.sin(elevation) * r, fov: cam.fov };
 }
+
+// Vertical field of view that still shows at least minHorizontal degrees across.
+// Landscape screens keep the chosen lens; tall portrait screens get a wider one.
+export function fitFov(vertical, aspect, minHorizontal) {
+  const toRad = Math.PI / 180;
+  const horizontal = 2 * Math.atan(Math.tan((vertical * toRad) / 2) * aspect) / toRad;
+  if (horizontal >= minHorizontal) return vertical;
+  return (2 * Math.atan(Math.tan((minHorizontal * toRad) / 2) / aspect)) / toRad;
+}

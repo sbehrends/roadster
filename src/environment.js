@@ -302,7 +302,8 @@ function createContactShadow(size = 9, res = 512) {
   return { group, plane, render };
 }
 
-export function createEnvironment(renderer) {
+// lite: lighter reflection and contact-shadow targets for phones.
+export function createEnvironment(renderer, { lite = false } = {}) {
   const scene = new THREE.Scene();
   scene.background = backgroundTexture();
   scene.fog = new THREE.FogExp2(BG, 0.011);
@@ -320,8 +321,8 @@ export function createEnvironment(renderer) {
 
   const reflector = new Reflector(new THREE.CircleGeometry(14, 64), {
     color: 0xb4b8c0,
-    textureWidth: 1024,
-    textureHeight: 1024,
+    textureWidth: lite ? 512 : 1024,
+    textureHeight: lite ? 512 : 1024,
     clipBias: 0.003,
     shader: ReflectShader,
   });
@@ -347,7 +348,7 @@ export function createEnvironment(renderer) {
   pool.position.y = 0.006;
   scene.add(pool);
 
-  const shadow = createContactShadow();
+  const shadow = createContactShadow(9, lite ? 256 : 512);
   scene.add(shadow.group);
 
   const hemi = new THREE.HemisphereLight(0xd9dde6, 0x0a0a0c, 0.05);

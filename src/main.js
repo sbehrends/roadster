@@ -9,11 +9,15 @@ import { createHud } from './hud.js';
 import { readInput } from './input.js';
 import { createState, headingOf, resetState, step } from './physics.js';
 import { createSmoke, updateSmoke } from './smoke.js';
-import { CAMERAS, createRig, cycleRig, dragRig, resetRig, rigOffset, settleRig, zoomRig } from './camera.js';
+import { CAMERAS, createRig, cycleRig, dragRig, fitFov, resetRig, rigOffset, settleRig, zoomRig } from './camera.js';
+import { mergeInput } from './controls.js';
+import { createTouchControls, wantsTouch } from './touch.js';
 import { buildArena } from './arena.js';
 
+// Phones get on-screen controls and a lighter render: fewer pixels, less MSAA, smaller targets.
+const touchMode = wantsTouch();
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-const pixelRatio = Math.min(window.devicePixelRatio, 2);
+const pixelRatio = Math.min(window.devicePixelRatio, touchMode ? 1.5 : 2);
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -24,14 +28,14 @@ renderer.domElement.className = 'view';
 document.body.prepend(renderer.domElement);
 
 const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 300);
-const env = createEnvironment(renderer);
+const env = createEnvironment(renderer, { lite: touchMode });
 const car = buildCar({ envMap: env.envMap });
 env.scene.add(car.group);
 const arena = buildArena(env.scene);
 const smoke = createSmoke();
 env.scene.add(smoke.points);
 
-const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: touchMode ? 2 : 4 });
 const composer = new EffectComposer(renderer, target);
 composer.addPass(new RenderPass(env.scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.18, 3.2);
@@ -40,6 +44,7 @@ composer.addPass(new OutputPass());
 
 const state = createState();
 const hud = createHud();
+const touch = touchMode ? createTouchControls({ onCamera: () => hud.toast(`${cycleRig(rig).name} camera`) }) : null;
 
 const shadowHide = [
   env.ground, env.reflector, env.pool, smoke.points, arena.group,
@@ -61,6 +66,8 @@ let ride = 0;
 let heading = 0;
 const rig = createRig();
 let pose = null;
+// Narrow portrait screens get a wider lens so the road ahead stays in view.
+const MIN_HORIZONTAL_FOV = 44;
 let dragging = false;
 let lastX = 0;
 let lastY = 0;
@@ -69,9 +76,17 @@ let resetHeld = false;
 // Camera controls: drag orbits and tilts, the wheel zooms, C switches camera, V resets the view.
 const view = renderer.domElement;
 view.style.touchAction = 'none';
+// Two fingers on the view pinch to zoom; one finger drags to orbit.
+const pointers = new Map();
+let pinch = 0;
 view.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
-  dragging = true;
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinch = Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  dragging = pointers.size === 1;
   lastX = event.clientX;
   lastY = event.clientY;
   try {
@@ -80,12 +95,21 @@ view.addEventListener('pointerdown', (event) => {
     // Synthetic or already-released pointers cannot be captured; dragging still works.
   }
 });
-const endDrag = () => {
+const endDrag = (event) => {
+  pointers.delete(event.pointerId);
   dragging = false;
 };
 view.addEventListener('pointerup', endDrag);
 view.addEventListener('pointercancel', endDrag);
 view.addEventListener('pointermove', (event) => {
+  if (pointers.has(event.pointerId)) pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomRig(rig, (pinch - d) * 3);
+    pinch = d;
+    return;
+  }
   if (!dragging) return;
   dragRig(rig, event.clientX - lastX, event.clientY - lastY);
   lastX = event.clientX;
@@ -168,7 +192,7 @@ function frameCamera(dt) {
   camera.position.copy(camPos);
   camera.up.set(0, 1, 0).lerp(bodyUp, ride).normalize();
   camera.lookAt(look);
-  const fov = rigged.fov + Math.min(speed, 70) * 0.13;
+  const fov = fitFov(rigged.fov + Math.min(speed, 70) * 0.13, camera.aspect, MIN_HORIZONTAL_FOV);
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov += (fov - camera.fov) * Math.min(1, dt * 3);
     camera.updateProjectionMatrix();
@@ -181,7 +205,7 @@ let paused = false;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  const input = readInput();
+  const input = touch ? mergeInput(readInput(), touch.state) : readInput();
   if (input.reset && !resetHeld) resetState(state, true);
   resetHeld = input.reset;
   if (!paused) step(state, input, dt);
