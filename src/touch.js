@@ -9,7 +9,8 @@ export function wantsTouch() {
   const forced = new URLSearchParams(window.location.search).get('touch');
   if (forced === '1') return true;
   if (forced === '0') return false;
-  return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  // Primary pointer only: touchscreen laptops report touch points but are driven by a mouse.
+  return window.matchMedia('(pointer: coarse)').matches;
 }
 
 const ICONS = {
@@ -80,11 +81,15 @@ export function createTouchControls({ onCamera } = {}) {
   };
   stick.addEventListener('pointerdown', (event) => {
     if (stickId !== null) return;
-    stickId = event.pointerId;
-    stick.setPointerCapture(event.pointerId);
     const rect = base.getBoundingClientRect();
     cx = rect.left + rect.width / 2;
     cy = rect.top + rect.height / 2;
+    stickId = event.pointerId;
+    try {
+      stick.setPointerCapture(event.pointerId);
+    } catch {
+      // Some synthetic pointers cannot be captured; the stick still tracks them.
+    }
     stick.classList.add('active');
     moveKnob(event.clientX, event.clientY);
     event.preventDefault();
